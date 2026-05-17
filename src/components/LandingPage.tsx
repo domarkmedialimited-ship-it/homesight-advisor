@@ -501,6 +501,8 @@ function TikTokIcon({ size = 18 }: { size?: number }) {
 
 function ContactSection() {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   return (
     <section id="contact" className="py-20 md:py-28 bg-background">
       <div className="max-w-7xl mx-auto px-5 lg:px-10 grid lg:grid-cols-2 gap-12">
@@ -568,9 +570,36 @@ function ContactSection() {
             </div>
           ) : (
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                setSubmitted(true);
+                if (submitting) return;
+                setSubmitError(null);
+                const fd = new FormData(e.currentTarget);
+                const payload = {
+                  name: String(fd.get("name") ?? ""),
+                  phone: String(fd.get("phone") ?? ""),
+                  email: String(fd.get("email") ?? ""),
+                  location: String(fd.get("location") ?? ""),
+                  budget: String(fd.get("budget") ?? ""),
+                  purpose: String(fd.get("purpose") ?? ""),
+                  message: String(fd.get("message") ?? ""),
+                };
+                setSubmitting(true);
+                try {
+                  const res = await fetch("/api/public/contact", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  if (!res.ok) throw new Error("Request failed");
+                  setSubmitted(true);
+                } catch {
+                  setSubmitError(
+                    "Something went wrong. Please try again or contact us directly on WhatsApp.",
+                  );
+                } finally {
+                  setSubmitting(false);
+                }
               }}
               className="space-y-4"
             >
@@ -605,10 +634,16 @@ function ContactSection() {
               </div>
               <button
                 type="submit"
+                disabled={submitting}
                 className="w-full py-3.5 bg-crimson text-white font-medium rounded-md hover:bg-crimson-dark transition-colors"
               >
                 Send Property Request
               </button>
+              {submitError && (
+                <p className="text-sm text-crimson mt-2" role="alert">
+                  {submitError}
+                </p>
+              )}
             </form>
           )}
         </div>
