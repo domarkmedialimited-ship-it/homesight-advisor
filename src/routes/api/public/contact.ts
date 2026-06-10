@@ -12,7 +12,7 @@ const ContactSchema = z.object({
 });
 
 const RECIPIENT = "sweethomesrealty10@gmail.com";
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
+const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 
 function escapeHtml(s: string) {
   return s
@@ -41,8 +41,8 @@ export const Route = createFileRoute("/api/public/contact")({
         const d = parsed.data;
 
         const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-        const RESEND_API_KEY = process.env.RESEND_API_KEY;
-        if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
+        const GOOGLE_MAIL_API_KEY = process.env.GOOGLE_MAIL_API_KEY;
+        if (!LOVABLE_API_KEY || !GOOGLE_MAIL_API_KEY) {
           console.error("Missing email credentials");
           return Response.json({ error: "Email service unavailable" }, { status: 500 });
         }
@@ -69,26 +69,46 @@ export const Route = createFileRoute("/api/public/contact")({
 </div>`;
 
         try {
-          const res = await fetch(`${GATEWAY_URL}/emails`, {
+          const subject = "New Property Request — SweetHomes Realty";
+          const boundary = `bnd_${Date.now()}`;
+          const rfc2822 = [
+            `To: ${RECIPIENT}`,
+            `Reply-To: ${d.email}`,
+            `Subject: =?UTF-8?B?${Buffer.from(subject, "utf-8").toString("base64")}?=`,
+            `MIME-Version: 1.0`,
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            ``,
+            `--${boundary}`,
+            `Content-Type: text/plain; charset="UTF-8"`,
+            ``,
+            text,
+            `--${boundary}`,
+            `Content-Type: text/html; charset="UTF-8"`,
+            ``,
+            html,
+            `--${boundary}--`,
+            ``,
+          ].join("\r\n");
+
+          const raw = Buffer.from(rfc2822, "utf-8")
+            .toString("base64")
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/, "");
+
+          const res = await fetch(`${GATEWAY_URL}/users/me/messages/send`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "X-Connection-Api-Key": RESEND_API_KEY,
+              "X-Connection-Api-Key": GOOGLE_MAIL_API_KEY,
             },
-            body: JSON.stringify({
-              from: "SweetHomes Realty <onboarding@resend.dev>",
-              to: [RECIPIENT],
-              reply_to: d.email,
-              subject: "New Property Request — SweetHomes Realty",
-              text,
-              html,
-            }),
+            body: JSON.stringify({ raw }),
           });
 
           if (!res.ok) {
             const errBody = await res.text();
-            console.error(`Resend send failed [${res.status}]: ${errBody}`);
+            console.error(`Gmail send failed [${res.status}]: ${errBody}`);
             return Response.json({ error: "Failed to send email" }, { status: 502 });
           }
 
